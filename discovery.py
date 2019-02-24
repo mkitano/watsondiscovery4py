@@ -6,8 +6,8 @@ import subprocess
 
 
 def exec(url, method, api_key):
-    cmd = 'curl -s -X %s -u "apikey":%s "%s"' % (method, api_key, url)
-    # print(cmd)
+    cmd = 'curl -s -X %s -u "apikey":%s %s' % (method, api_key, url)
+    print(cmd)
     proc_stdout = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE).stdout.read().decode("utf-8")
     # print(proc_stdout)
     return json.loads(proc_stdout)
@@ -15,27 +15,36 @@ def exec(url, method, api_key):
 
 def get_collection_details(url, environment_id, collection_id, version, api_key):
     collection_url = url % (environment_id, collection_id, "", version)
-    return exec(collection_url, "GET", api_key)
+    return exec("\"" + collection_url + "\"", "GET", api_key)
 
 
 def get_document_list(url, environment_id, collection_id, version, api_key, count):
     query_url = url % (environment_id, collection_id, "/query", version)
     query_str = "&return=id&count=%s" % count
-    return exec(query_url + query_str, "GET", api_key)
+    return exec("\"" + query_url + query_str + "\"", "GET", api_key)
+
+
+def write_file(path, document_list):
+    with open(path, mode='w') as f:
+        for document in document_list["results"]:
+            document_id = document["id"]
+            f.write(document_id + '\n')
 
 
 def delete_document(url, environment_id, collection_id, version, api_key, document_id):
-    document_url = url % (environment_id, collection_id, "/documents/%s", version)
-    exec(document_url % document_id, "DELETE", api_key)
+    document_url = url % (environment_id, collection_id, "/documents/" + document_id, version)
+    ret = exec("\"" + document_url + "\"", "DELETE", api_key)
+    print(ret)
 
 
-def add_documents(path, url):
+def add_documents(path, url, environment_id, collection_id, version, api_key):
     files = os.listdir(path)
 
-    add_documents_url = url % (environment_id, collection_id, "/documents", version) + " -F file=@%s"
+    add_documents_url = url % (environment_id, collection_id, "/documents", version)
+    option_file = " -F file=@%s"
 
     for file in files:
-        ret = exec(add_documents_url % (path + file), "POST", api_key)
+        ret = exec("\"" + add_documents_url + "\"" + option_file % (path + file), "POST", api_key)
 
 
 config = configparser.ConfigParser()
@@ -49,8 +58,6 @@ version = config.get('discovery', 'version')
 
 url += "environments/%s/collections/%s%s?version=%s"
 
-str_cmd = 'curl -X %s -u "apikey":%s "%s"'
-
 path = "c:/dev/watson_doc/"
 
 collection_details = get_collection_details(url, environment_id, collection_id, version, api_key)
@@ -63,10 +70,10 @@ print("document count: available(%s), processing(%s), failed(%s)" % (
 
 document_list = get_document_list(url, environment_id, collection_id, version, api_key, document_count_available)
 
-for document in document_list["results"]:
-    document_id = document["id"]
-    ret = delete_document(url, environment_id, collection_id, version, api_key, document_id)
-    print("document_id: %s, status: %s" % (ret["document_id"], ret["status"]))
+write_file("document_id.txt", document_list)
 
-# add_documents(path, url)
-# delete_documents(url, environment_id, collection_id, version, api_key, count)
+# for document in document_list["results"]:
+#     document_id = document["id"]
+#     ret = delete_document(url, environment_id, collection_id, version, api_key, document_id)
+#
+# add_documents(path, url, environment_id, collection_id, version, api_key)
